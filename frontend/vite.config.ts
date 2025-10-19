@@ -14,6 +14,7 @@ export default defineConfig({
       $lib: path.resolve(__dirname, './src/lib'),
       $components: path.resolve(__dirname, './src/components'),
     },
+    extensions: ['.js', '.ts', '.jsx', '.tsx', '.json', '.svelte'],
   },
   server: {
     port: 5173,
