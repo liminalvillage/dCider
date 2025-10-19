@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import sveltePreprocess from 'svelte-preprocess';
+import path from 'path';
 
 export default defineConfig({
   plugins: [
@@ -10,8 +11,8 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      $lib: '/src/lib',
-      $components: '/src/components',
+      $lib: path.resolve(__dirname, './src/lib'),
+      $components: path.resolve(__dirname, './src/components'),
     },
   },
   server: {
@@ -21,6 +22,12 @@ export default defineConfig({
   build: {
     target: 'es2022',
     outDir: 'dist',
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: undefined,
+      },
+    },
   },
   test: {
     globals: true,
