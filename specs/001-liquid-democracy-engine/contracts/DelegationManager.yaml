@@ -1,0 +1,339 @@
+openapi: 3.0.0
+info:
+  title: DelegationManager Contract Interface
+  description: Core contract handling delegation and revocation logic for Liquid Democracy Engine
+  version: 1.0.0
+
+components:
+  schemas:
+    Delegation:
+      type: object
+      properties:
+        delegator:
+          type: string
+          format: address
+          description: Address delegating voting power
+        delegate:
+          type: string
+          format: address
+          description: Address receiving delegated power
+        topicId:
+          type: integer
+          format: uint256
+          description: Topic ID for this delegation
+        timestamp:
+          type: integer
+          format: uint256
+          description: Block timestamp when delegation created
+        depth:
+          type: integer
+          format: uint8
+          description: Delegation chain depth (0-7)
+
+    DeadEndDeclaration:
+      type: object
+      properties:
+        delegate:
+          type: string
+          format: address
+        topicId:
+          type: integer
+          format: uint256
+        active:
+          type: boolean
+        declaredAt:
+          type: integer
+          format: uint256
+
+  events:
+    Delegated:
+      description: Emitted when a voter delegates their power
+      properties:
+        delegator:
+          type: string
+          format: address
+          indexed: true
+        delegate:
+          type: string
+          format: address
+          indexed: true
+        topicId:
+          type: integer
+          format: uint256
+          indexed: true
+        timestamp:
+          type: integer
+          format: uint256
+
+    Revoked:
+      description: Emitted when a voter revokes their delegation
+      properties:
+        delegator:
+          type: string
+          format: address
+          indexed: true
+        topicId:
+          type: integer
+          format: uint256
+          indexed: true
+        timestamp:
+          type: integer
+          format: uint256
+
+    DeadEndDeclared:
+      description: Emitted when a delegate declares dead-end status
+      properties:
+        delegate:
+          type: string
+          format: address
+          indexed: true
+        topicId:
+          type: integer
+          format: uint256
+          indexed: true
+        timestamp:
+          type: integer
+          format: uint256
+
+    DeadEndRevoked:
+      description: Emitted when a delegate revokes dead-end status
+      properties:
+        delegate:
+          type: string
+          format: address
+          indexed: true
+        topicId:
+          type: integer
+          format: uint256
+          indexed: true
+        timestamp:
+          type: integer
+          format: uint256
+
+paths:
+  /delegate:
+    post:
+      summary: Delegate voting power for a topic
+      description: |
+        Delegate msg.sender's voting power on specified topic to delegate address.
+        Validates: no self-delegation, no cycles, max depth 7, topic active, delegate not dead-end.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                topicId:
+                  type: integer
+                  format: uint256
+                  description: Topic ID to delegate
+                delegate:
+                  type: string
+                  format: address
+                  description: Address to delegate to
+      responses:
+        '200':
+          description: Delegation successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  transactionHash:
+                    type: string
+                  event:
+                    $ref: '#/components/events/Delegated'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    enum:
+                      - "Cannot self-delegate"
+                      - "Creates cycle"
+                      - "Exceeds max depth of 7"
+                      - "Topic not active"
+                      - "Delegate is dead-end"
+
+  /revoke:
+    post:
+      summary: Revoke delegation for a topic
+      description: |
+        Revoke msg.sender's delegation on specified topic, returning voting power to sender.
+        No-op if no delegation exists.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                topicId:
+                  type: integer
+                  format: uint256
+      responses:
+        '200':
+          description: Revocation successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  event:
+                    $ref: '#/components/events/Revoked'
+
+  /declareDeadEnd:
+    post:
+      summary: Declare dead-end status for a topic
+      description: |
+        Declare that msg.sender will not delegate further on this topic.
+        Prevents future delegations by this address on the topic.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                topicId:
+                  type: integer
+                  format: uint256
+      responses:
+        '200':
+          description: Dead-end declared
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  event:
+                    $ref: '#/components/events/DeadEndDeclared'
+
+  /revokeDeadEnd:
+    post:
+      summary: Revoke dead-end status for a topic
+      description: |
+        Revoke previously declared dead-end status, allowing future delegations.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                topicId:
+                  type: integer
+                  format: uint256
+      responses:
+        '200':
+          description: Dead-end revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  event:
+                    $ref: '#/components/events/DeadEndRevoked'
+
+  /getDelegation:
+    get:
+      summary: Get current delegation for address and topic
+      parameters:
+        - name: delegator
+          in: query
+          required: true
+          schema:
+            type: string
+            format: address
+        - name: topicId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: uint256
+      responses:
+        '200':
+          description: Delegation info
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Delegation'
+
+  /isDeadEnd:
+    get:
+      summary: Check if address is dead-end for topic
+      parameters:
+        - name: delegate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: address
+        - name: topicId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: uint256
+      responses:
+        '200':
+          description: Dead-end status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  isDeadEnd:
+                    type: boolean
+                  declaredAt:
+                    type: integer
+                    format: uint256
+
+  /getDelegationDepth:
+    get:
+      summary: Get delegation chain depth for address on topic
+      description: Returns 0 if not delegated, 1-7 based on chain position
+      parameters:
+        - name: address
+          in: query
+          required: true
+          schema:
+            type: string
+            format: address
+        - name: topicId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: uint256
+      responses:
+        '200':
+          description: Delegation depth
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  depth:
+                    type: integer
+                    format: uint8
+                    minimum: 0
+                    maximum: 7
+
+security:
+  - WalletSignature: []
+
+securitySchemes:
+  WalletSignature:
+    type: http
+    scheme: bearer
+    bearerFormat: Ethereum transaction signature

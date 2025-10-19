@@ -1,0 +1,212 @@
+openapi: 3.0.0
+info:
+  title: TopicRegistry Contract Interface
+  description: Contract for managing governance topics and their configuration
+  version: 1.0.0
+
+components:
+  schemas:
+    Topic:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: uint256
+        name:
+          type: string
+          maxLength: 64
+        descriptionCID:
+          type: string
+          format: bytes32
+          description: IPFS CID of topic description
+        proposalThreshold:
+          type: integer
+          format: uint256
+          description: Min voting power to create proposals
+        active:
+          type: boolean
+        createdAt:
+          type: integer
+          format: uint256
+        admin:
+          type: string
+          format: address
+
+  events:
+    TopicCreated:
+      properties:
+        topicId:
+          type: integer
+          format: uint256
+          indexed: true
+        name:
+          type: string
+        admin:
+          type: string
+          format: address
+          indexed: true
+
+    TopicUpdated:
+      properties:
+        topicId:
+          type: integer
+          format: uint256
+          indexed: true
+        field:
+          type: string
+          enum:
+            - "name"
+            - "descriptionCID"
+            - "proposalThreshold"
+            - "active"
+        newValue:
+          type: string
+
+paths:
+  /createTopic:
+    post:
+      summary: Create new governance topic (admin only)
+      security:
+        - AdminOnly: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  maxLength: 64
+                descriptionCID:
+                  type: string
+                  format: bytes32
+                proposalThreshold:
+                  type: integer
+                  format: uint256
+                  description: Min voting power for proposal creation
+      responses:
+        '200':
+          description: Topic created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  topicId:
+                    type: integer
+                    format: uint256
+                  event:
+                    $ref: '#/components/events/TopicCreated'
+        '400':
+          description: Validation error (name empty, threshold 0, etc.)
+        '403':
+          description: Unauthorized
+
+  /getTopic:
+    get:
+      summary: Get topic details by ID
+      parameters:
+        - name: topicId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: uint256
+      responses:
+        '200':
+          description: Topic details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Topic'
+        '404':
+          description: Topic not found
+
+  /getAllTopics:
+    get:
+      summary: Get list of all topics
+      parameters:
+        - name: activeOnly
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Filter to only active topics
+      responses:
+        '200':
+          description: Topic list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  topics:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Topic'
+                  count:
+                    type: integer
+
+  /updateTopicThreshold:
+    post:
+      summary: Update proposal threshold for topic (admin only)
+      security:
+        - AdminOnly: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                topicId:
+                  type: integer
+                  format: uint256
+                newThreshold:
+                  type: integer
+                  format: uint256
+      responses:
+        '200':
+          description: Threshold updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  event:
+                    $ref: '#/components/events/TopicUpdated'
+
+  /setTopicActive:
+    post:
+      summary: Activate or deactivate topic (admin only)
+      security:
+        - AdminOnly: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                topicId:
+                  type: integer
+                  format: uint256
+                active:
+                  type: boolean
+      responses:
+        '200':
+          description: Topic status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  event:
+                    $ref: '#/components/events/TopicUpdated'
+
+securitySchemes:
+  AdminOnly:
+    type: apiKey
+    in: header
+    name: X-Admin-Signature

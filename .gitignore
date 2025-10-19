@@ -1,0 +1,79 @@
+# Node.js / JavaScript / TypeScript
+node_modules/
+dist/
+build/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-store/
+.npm/
+.yarn/
+*.tsbuildinfo
+docs/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+.env.test
+
+# Solidity / Hardhat / Foundry
+cache/
+out/
+artifacts/
+typechain/
+typechain-types/
+coverage/
+coverage.json
+.openzeppelin/
+deployments/
+broadcast/
+*.sol.abi
+*.sol.bin
+
+# Foundry
+lib/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Test coverage
+lcov.info
+.nyc_output/
+
+# Build artifacts
+*.tgz
+*.zip
+*.tar.gz
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+logs/
+*.log
+
+# Svelte build
+.svelte-kit/
+.vercel/
+.netlify/
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*

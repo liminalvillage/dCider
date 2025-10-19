@@ -1,0 +1,239 @@
+openapi: 3.0.0
+info:
+  title: RewardDistributor Contract Interface
+  description: Contract managing Superfluid streaming rewards proportional to voting power
+  version: 1.0.0
+
+components:
+  schemas:
+    RewardStream:
+      type: object
+      properties:
+        delegate:
+          type: string
+          format: address
+        topicId:
+          type: integer
+          format: uint256
+        flowRate:
+          type: integer
+          format: int96
+          description: Superfluid flow rate (tokens per second)
+        totalStreamed:
+          type: integer
+          format: uint256
+          description: Total tokens streamed to date
+        lastUpdated:
+          type: integer
+          format: uint256
+        active:
+          type: boolean
+
+  events:
+    FlowCreated:
+      properties:
+        delegate:
+          type: string
+          format: address
+          indexed: true
+        topicId:
+          type: integer
+          format: uint256
+          indexed: true
+        flowRate:
+          type: integer
+          format: int96
+
+    FlowUpdated:
+      properties:
+        delegate:
+          type: string
+          format: address
+          indexed: true
+        topicId:
+          type: integer
+          format: uint256
+          indexed: true
+        oldFlowRate:
+          type: integer
+          format: int96
+        newFlowRate:
+          type: integer
+          format: int96
+
+    FlowDeleted:
+      properties:
+        delegate:
+          type: string
+          format: address
+          indexed: true
+        topicId:
+          type: integer
+          format: uint256
+          indexed: true
+
+paths:
+  /updateFlows:
+    post:
+      summary: Update reward flows based on new voting power distribution
+      description: |
+        Called by VotePowerVerifier after attestation acceptance (or batched every 5 min).
+        Recalculates flow rates proportional to voting power and updates Superfluid streams.
+        Creates flows for new delegates, updates existing, deletes when power drops to 0.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                topicId:
+                  type: integer
+                  format: uint256
+                votingPowerMapping:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      delegate:
+                        type: string
+                        format: address
+                      power:
+                        type: integer
+                        format: uint256
+      responses:
+        '200':
+          description: Flows updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  flowsCreated:
+                    type: integer
+                  flowsUpdated:
+                    type: integer
+                  flowsDeleted:
+                    type: integer
+                  events:
+                    type: array
+                    items:
+                      oneOf:
+                        - $ref: '#/components/events/FlowCreated'
+                        - $ref: '#/components/events/FlowUpdated'
+                        - $ref: '#/components/events/FlowDeleted'
+
+  /getFlowRate:
+    get:
+      summary: Get current flow rate for delegate on topic
+      parameters:
+        - name: delegate
+          in: query
+          required: true
+          schema:
+            type: string
+            format: address
+        - name: topicId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: uint256
+      responses:
+        '200':
+          description: Flow rate info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  flowRate:
+                    type: integer
+                    format: int96
+                  totalStreamed:
+                    type: integer
+                    format: uint256
+                  lastUpdated:
+                    type: integer
+                    format: uint256
+
+  /getPoolFlowRate:
+    get:
+      summary: Get total reward pool flow rate for topic
+      description: Returns the maximum tokens per second distributed for this topic
+      parameters:
+        - name: topicId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: uint256
+      responses:
+        '200':
+          description: Pool flow rate
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  poolFlowRate:
+                    type: integer
+                    format: int96
+                    description: Total tokens/sec available for distribution
+                  totalDistributed:
+                    type: integer
+                    format: int96
+                    description: Sum of all active delegate flow rates
+                  remainingCapacity:
+                    type: integer
+                    format: int96
+                    description: Unused flow rate capacity
+
+  /estimateMonthlyReward:
+    get:
+      summary: Estimate monthly reward for voting power amount
+      description: Calculate expected monthly tokens for given voting power (view function)
+      parameters:
+        - name: topicId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: uint256
+        - name: votingPower:
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: uint256
+        - name: totalVotingPower:
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: uint256
+      responses:
+        '200':
+          description: Estimated monthly reward
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tokensPerMonth:
+                    type: integer
+                    format: uint256
+                  flowRate:
+                    type: integer
+                    format: int96
+                  sharePercentage:
+                    type: number
+                    format: float
+                    description: Voting power as % of total
+
+securitySchemes:
+  VotePowerVerifierOnly:
+    type: apiKey
+    in: header
+    name: X-Verifier-Call
+    description: Only VotePowerVerifier contract can call updateFlows

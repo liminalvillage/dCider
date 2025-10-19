@@ -1,0 +1,351 @@
+openapi: 3.0.0
+info:
+  title: VotePowerVerifier Contract Interface
+  description: Contract for verifying M-of-N enclave attestations and managing voting power results
+  version: 1.0.0
+
+components:
+  schemas:
+    EnclaveOperator:
+      type: object
+      properties:
+        operatorAddress:
+          type: string
+          format: address
+        enclavePublicKey:
+          type: string
+          format: bytes
+          description: Public key of TEE enclave instance
+        active:
+          type: boolean
+        addedAt:
+          type: integer
+          format: uint256
+        attestationCount:
+          type: integer
+          format: uint256
+
+    Attestation:
+      type: object
+      properties:
+        resultHash:
+          type: string
+          format: bytes32
+          description: Keccak256 hash of voting power mapping
+        topicId:
+          type: integer
+          format: uint256
+        blockNumber:
+          type: integer
+          format: uint256
+          description: Block at which delegation state was read
+        signatures:
+          type: array
+          items:
+            type: string
+            format: bytes
+          description: ECDSA signatures from M-of-N operators
+        nonce:
+          type: integer
+          format: uint256
+          description: Unique nonce for replay protection
+
+  events:
+    AttestationSubmitted:
+      properties:
+        resultHash:
+          type: string
+          format: bytes32
+          indexed: true
+        topicId:
+          type: integer
+          format: uint256
+          indexed: true
+        blockNumber:
+          type: integer
+          format: uint256
+        operators:
+          type: array
+          items:
+            type: string
+            format: address
+          description: Addresses of operators who signed
+
+    AttestationAccepted:
+      properties:
+        resultHash:
+          type: string
+          format: bytes32
+          indexed: true
+        timestamp:
+          type: integer
+          format: uint256
+
+    AttestationRejected:
+      properties:
+        resultHash:
+          type: string
+          format: bytes32
+          indexed: true
+        reason:
+          type: string
+          description: Human-readable rejection reason
+
+    VotingPowerUpdated:
+      properties:
+        topicId:
+          type: integer
+          format: uint256
+          indexed: true
+        attestationHash:
+          type: string
+          format: bytes32
+        timestamp:
+          type: integer
+          format: uint256
+
+    OperatorAdded:
+      properties:
+        operator:
+          type: string
+          format: address
+          indexed: true
+        enclavePublicKey:
+          type: string
+          format: bytes
+
+    OperatorRemoved:
+      properties:
+        operator:
+          type: string
+          format: address
+          indexed: true
+
+paths:
+  /submitAttestation:
+    post:
+      summary: Submit enclave attestation for voting power computation
+      description: |
+        Submit M-of-N signed attestation proving voting power distribution.
+        Validates signatures, quorum (3-of-5), freshness, and replay protection.
+        On acceptance, updates voting power cache and notifies RewardDistributor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Attestation'
+      responses:
+        '200':
+          description: Attestation accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted:
+                    type: boolean
+                  event:
+                    $ref: '#/components/events/AttestationAccepted'
+        '400':
+          description: Attestation rejected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accepted:
+                    type: boolean
+                    example: false
+                  reason:
+                    type: string
+                    enum:
+                      - "Insufficient signatures (need 3)"
+                      - "Invalid operator signature"
+                      - "Duplicate operator signature"
+                      - "Nonce already used"
+                      - "Block number too old"
+                  event:
+                    $ref: '#/components/events/AttestationRejected'
+
+  /getVotingPower:
+    get:
+      summary: Get cached voting power for address on topic
+      description: Returns latest attested voting power from on-chain cache
+      parameters:
+        - name: address
+          in: query
+          required: true
+          schema:
+            type: string
+            format: address
+        - name: topicId
+          in: query
+          required: true
+          schema:
+            type: integer
+            format: uint256
+      responses:
+        '200':
+          description: Voting power
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  power:
+                    type: integer
+                    format: uint256
+                  lastUpdated:
+                    type: integer
+                    format: uint256
+                  attestationHash:
+                    type: string
+                    format: bytes32
+
+  /getOperators:
+    get:
+      summary: Get list of authorized enclave operators
+      responses:
+        '200':
+          description: Operator set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  operators:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EnclaveOperator'
+                  threshold:
+                    type: integer
+                    description: M value (signatures required)
+                    example: 3
+                  totalOperators:
+                    type: integer
+                    description: N value (total operators)
+                    example: 5
+
+  /isOperator:
+    get:
+      summary: Check if address is authorized operator
+      parameters:
+        - name: address
+          in: query
+          required: true
+          schema:
+            type: string
+            format: address
+      responses:
+        '200':
+          description: Operator status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  isOperator:
+                    type: boolean
+                  active:
+                    type: boolean
+
+  /verifySignature:
+    get:
+      summary: Verify operator signature on result hash (view function for testing)
+      parameters:
+        - name: resultHash
+          in: query
+          required: true
+          schema:
+            type: string
+            format: bytes32
+        - name: signature
+          in: query
+          required: true
+          schema:
+            type: string
+            format: bytes
+      responses:
+        '200':
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  valid:
+                    type: boolean
+                  recoveredAddress:
+                    type: string
+                    format: address
+
+  /addOperator:
+    post:
+      summary: Add new enclave operator (admin only)
+      description: Add operator to authorized set. Must maintain N=5 total.
+      security:
+        - AdminOnly: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                operatorAddress:
+                  type: string
+                  format: address
+                enclavePublicKey:
+                  type: string
+                  format: bytes
+      responses:
+        '200':
+          description: Operator added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  event:
+                    $ref: '#/components/events/OperatorAdded'
+        '403':
+          description: Unauthorized (not admin)
+
+  /removeOperator:
+    post:
+      summary: Remove enclave operator (admin only)
+      description: Remove operator from set. Cannot reduce below M threshold.
+      security:
+        - AdminOnly: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                operatorAddress:
+                  type: string
+                  format: address
+      responses:
+        '200':
+          description: Operator removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  event:
+                    $ref: '#/components/events/OperatorRemoved'
+        '400':
+          description: Cannot remove - would violate threshold
+        '403':
+          description: Unauthorized (not admin)
+
+securitySchemes:
+  AdminOnly:
+    type: apiKey
+    in: header
+    name: X-Admin-Signature
+    description: Requires admin/governance authorization
