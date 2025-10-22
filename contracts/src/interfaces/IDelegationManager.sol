@@ -153,4 +153,15 @@ interface IDelegationManager {
         external
         view
         returns (address[] memory delegators, address[] memory delegates);
+
+    /**
+     * @notice Calculate voting power for a terminal delegate based on delegation chains
+     * @param terminal The terminal delegate address
+     * @param topicId Topic ID
+     * @return votingPower Number of votes delegated to this terminal (including their own vote)
+     */
+    function calculateVotingPower(address terminal, uint256 topicId)
+        external
+        view
+        returns (uint256 votingPower);
 }

@@ -16,13 +16,13 @@ export interface ContractAddresses {
 // Chiado Testnet (chainId: 10200)
 // Deployed on 2025-10-18
 // Updated with getTopicDelegators function: 2025-10-18
-// ProposalManager redeployed: 2025-10-19 (fixed contract references)
+// Redeployed: 2025-10-19 (dynamic vote tallying - delegation revocation updates vote counts)
 export const CHIADO_ADDRESSES: ContractAddresses = {
-  delegationManager: '0x4653C8826930F9F293955cc3a904D0114c81637E',
+  delegationManager: '0x4c8875ac664bb0a94f5eE71b232A786772Fdd704',
   topicRegistry: '0x9d9063f220aA191aAC406De2A5432A577b253827',
   votePowerVerifier: '0x9aef5a8B434BF396049E06050e59D1036Eed7e84',
   rewardDistributor: '0x0000000000000000000000000000000000000000',
-  proposalManager: '0xA149b19B57BA49a6B19c40318279B68aaa79Ffcd',
+  proposalManager: '0xBF57d60545a4A47e6c01197D2Dd91F5E06780Fa5',
 };
 
 // Debug: log loaded addresses

@@ -348,4 +348,42 @@ contract DelegationManager is IDelegationManager, ReentrancyGuard {
 
         return activeDelegators;
     }
+
+    /**
+     * @notice Calculate voting power for a terminal delegate based on delegation chains
+     * @dev Counts how many delegators ultimately delegate to this terminal address
+     * @param terminal The terminal delegate address
+     * @param topicId Topic identifier
+     * @return votingPower Number of votes delegated to this terminal (including their own vote)
+     */
+    function calculateVotingPower(address terminal, uint256 topicId)
+        external
+        view
+        returns (uint256 votingPower)
+    {
+        // Start with 1 (terminal's own vote)
+        votingPower = 1;
+
+        // Iterate through all delegators and count those whose terminal delegate is this address
+        address[] memory allDelegators = _topicDelegators[topicId];
+
+        for (uint256 i = 0; i < allDelegators.length; i++) {
+            address delegator = allDelegators[i];
+
+            // Skip if no active delegation
+            if (_delegations[topicId][delegator] == address(0)) {
+                continue;
+            }
+
+            // Get terminal delegate for this delegator
+            address delegatorTerminal = DelegationGraph.getTerminalDelegate(_delegations[topicId], delegator);
+
+            // If this delegator's terminal is the target terminal, count their vote
+            if (delegatorTerminal == terminal) {
+                votingPower++;
+            }
+        }
+
+        return votingPower;
+    }
 }

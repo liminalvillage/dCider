@@ -109,6 +109,7 @@
               <div class="visual-orb orb-1"></div>
               <div class="visual-orb orb-2"></div>
               <div class="visual-orb orb-3"></div>
+              <img src="/dCider.png" alt="dCider Logo" class="hero-logo" />
             </div>
           </div>
 
@@ -483,6 +484,7 @@
     filter: blur(40px);
     opacity: 0.6;
     animation: float 3s ease-in-out infinite;
+    z-index: 1;
   }
 
   .orb-1 {
@@ -512,6 +514,16 @@
     animation-delay: 2s;
   }
 
+  .hero-logo {
+    position: relative;
+    z-index: 10;
+    width: 350px;
+    height: 350px;
+    object-fit: contain;
+    animation: logoGlow 2s ease-in-out infinite alternate;
+    filter: drop-shadow(0 15px 40px rgba(99, 102, 241, 0.7));
+  }
+
   @keyframes float {
     0%, 100% {
       transform: translateY(0px) translateX(0px) scale(1);
@@ -521,6 +533,24 @@
     }
     66% {
       transform: translateY(20px) translateX(-20px) scale(0.9);
+    }
+  }
+
+  @keyframes logoFloat {
+    0%, 100% {
+      transform: translateY(0px) rotate(0deg);
+    }
+    50% {
+      transform: translateY(-20px) rotate(5deg);
+    }
+  }
+
+  @keyframes logoGlow {
+    0% {
+      filter: drop-shadow(0 10px 30px rgba(99, 102, 241, 0.6));
+    }
+    100% {
+      filter: drop-shadow(0 15px 40px rgba(139, 92, 246, 0.8));
     }
   }
 
