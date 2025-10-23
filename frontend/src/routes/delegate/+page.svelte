@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { walletStore } from '$lib/web3/walletConnect';
+  import { walletStore, getFreshSigner } from '$lib/web3/walletConnect';
   import TopicSelector from '$components/delegation/TopicSelector.svelte';
   import DelegateInput from '$components/delegation/DelegateInput.svelte';
   import {
@@ -26,7 +26,6 @@
 
   $: connected = $walletStore.connected;
   $: userAddress = $walletStore.address;
-  $: signer = $walletStore.signer;
   $: provider = $walletStore.provider;
   $: chainId = $walletStore.chainId;
 
@@ -68,7 +67,7 @@
   }
 
   async function handleDelegate() {
-    if (!selectedTopicId || !delegateAddress || !signer || !chainId) {
+    if (!selectedTopicId || !delegateAddress || !chainId) {
       error = 'Missing required information';
       return;
     }
@@ -78,7 +77,10 @@
     success = null;
 
     try {
-      const txHash = await delegate(signer, chainId, selectedTopicId, delegateAddress);
+      // Get fresh signer to ensure it matches current MetaMask account
+      const freshSigner = await getFreshSigner();
+
+      const txHash = await delegate(freshSigner, chainId, selectedTopicId, delegateAddress);
       success = currentDelegation
         ? `Delegation updated successfully! Transaction: ${txHash.slice(0, 10)}...`
         : `Delegation successful! Transaction: ${txHash.slice(0, 10)}...`;
@@ -95,7 +97,7 @@
   }
 
   async function handleRevoke() {
-    if (!selectedTopicId || !signer || !chainId) {
+    if (!selectedTopicId || !chainId) {
       error = 'Missing required information';
       return;
     }
@@ -105,7 +107,10 @@
     success = null;
 
     try {
-      const txHash = await revoke(signer, chainId, selectedTopicId);
+      // Get fresh signer to ensure it matches current MetaMask account
+      const freshSigner = await getFreshSigner();
+
+      const txHash = await revoke(freshSigner, chainId, selectedTopicId);
       success = `Revocation successful! Transaction: ${txHash.slice(0, 10)}...`;
 
       // Reload delegation

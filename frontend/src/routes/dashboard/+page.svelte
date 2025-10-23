@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { ethers } from 'ethers';
-  import { walletStore } from '$lib/web3/walletConnect';
+  import { walletStore, getFreshSigner } from '$lib/web3/walletConnect';
   import { getAllTopics, type TopicSummary } from '$lib/contracts/topicRegistry';
   import {
     delegate,
@@ -58,7 +58,6 @@
 
   $: connected = $walletStore.connected;
   $: userAddress = $walletStore.address;
-  $: signer = $walletStore.signer;
   $: provider = $walletStore.provider;
   $: chainId = $walletStore.chainId;
 
@@ -115,11 +114,12 @@
   }
 
   async function loadGraph() {
-    if (!selectedTopicId || !signer || !chainId) return;
+    if (!selectedTopicId || !chainId) return;
 
     try {
       loadingGraph = true;
-      graphData = await fetchDelegationGraph(signer, chainId, selectedTopicId, userAddress);
+      // Use the signer from walletStore for read operations (graph data)
+      graphData = await fetchDelegationGraph($walletStore.signer, chainId, selectedTopicId, userAddress);
     } catch (e: any) {
       console.error('Error loading graph:', e);
     } finally {
@@ -187,7 +187,7 @@
   }
 
   async function handleDelegate() {
-    if (!selectedTopicId || !delegateAddress || !signer || !chainId) {
+    if (!selectedTopicId || !delegateAddress || !chainId) {
       delegationError = 'Missing required information';
       return;
     }
@@ -197,7 +197,10 @@
     delegationSuccess = null;
 
     try {
-      const txHash = await delegate(signer, chainId, selectedTopicId, delegateAddress);
+      // Get fresh signer to ensure it matches current MetaMask account
+      const freshSigner = await getFreshSigner();
+
+      const txHash = await delegate(freshSigner, chainId, selectedTopicId, delegateAddress);
       delegationSuccess = `Delegation successful! TX: ${txHash.slice(0, 10)}...`;
 
       // Reload delegation and graph
@@ -213,7 +216,7 @@
   }
 
   async function handleRevoke() {
-    if (!selectedTopicId || !signer || !chainId) {
+    if (!selectedTopicId || !chainId) {
       delegationError = 'Missing required information';
       return;
     }
@@ -223,7 +226,10 @@
     delegationSuccess = null;
 
     try {
-      const txHash = await revoke(signer, chainId, selectedTopicId);
+      // Get fresh signer to ensure it matches current MetaMask account
+      const freshSigner = await getFreshSigner();
+
+      const txHash = await revoke(freshSigner, chainId, selectedTopicId);
       delegationSuccess = `Delegation revoked! TX: ${txHash.slice(0, 10)}...`;
 
       // Reload delegation and graph
@@ -268,11 +274,12 @@
     proposalError = null;
 
     try {
-      const { signer, chainId } = $walletStore;
-
-      if (!signer || !chainId) {
+      if (!chainId) {
         throw new Error('Wallet not connected');
       }
+
+      // Get fresh signer to ensure it matches current MetaMask account
+      const freshSigner = await getFreshSigner();
 
       // Double-check terminal delegate status before sending transaction
       const terminalDelegate = await getTerminalDelegate(provider, chainId, userAddress, selectedTopicId);
@@ -299,7 +306,7 @@
       });
 
       const result = await createProposal(
-        signer,
+        freshSigner,
         chainId,
         selectedTopicId,
         proposalTitle,
@@ -359,7 +366,7 @@
   }
 
   async function handleVote(proposalId: number, choice: VoteChoice) {
-    if (!signer || !chainId) {
+    if (!chainId) {
       delegationError = 'Wallet not connected';
       return;
     }
@@ -374,7 +381,10 @@
     delegationSuccess = null;
 
     try {
-      const txHash = await castVote(signer, chainId, proposalId, choice);
+      // Get fresh signer to ensure it matches current MetaMask account
+      const freshSigner = await getFreshSigner();
+
+      const txHash = await castVote(freshSigner, chainId, proposalId, choice);
 
       const choiceLabel = choice === VoteChoice.For ? 'For' : choice === VoteChoice.Against ? 'Against' : 'Abstain';
       delegationSuccess = `Vote cast successfully (${choiceLabel})! TX: ${txHash.slice(0, 10)}...`;

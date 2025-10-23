@@ -52,26 +52,83 @@ export async function delegate(
   const contract = getDelegationManagerContract(signer, chainId);
 
   try {
-    const tx = await contract.delegate(topicId, delegateAddress);
-    const receipt = await tx.wait();
-    return receipt.hash;
-  } catch (error: any) {
-    console.error('Error delegating vote:', error);
+    const signerAddress = await signer.getAddress();
+    console.log('[DelegationManager] Delegating:', {
+      topicId,
+      delegateAddress,
+      signerAddress
+    });
 
-    // Parse custom errors
-    if (error.message.includes('CannotSelfDelegate')) {
-      throw new Error('Cannot delegate to yourself');
-    } else if (error.message.includes('TopicNotActive')) {
-      throw new Error('Topic is not active');
-    } else if (error.message.includes('DelegateIsDeadEnd')) {
-      throw new Error('Delegate has declared themselves as a dead-end');
-    } else if (error.message.includes('CreatesCycle')) {
-      throw new Error('This delegation would create a cycle');
-    } else if (error.message.includes('ExceedsMaxDepth')) {
-      throw new Error('This delegation would exceed maximum depth (7 levels)');
+    // Estimate gas before sending transaction
+    let gasLimit;
+    try {
+      const estimatedGas = await contract.delegate.estimateGas(topicId, delegateAddress);
+      // Add 20% buffer to estimated gas
+      gasLimit = (estimatedGas * 120n) / 100n;
+      console.log('[DelegationManager] Gas estimate:', {
+        estimated: estimatedGas.toString(),
+        withBuffer: gasLimit.toString()
+      });
+    } catch (gasError: any) {
+      console.error('[DelegationManager] Gas estimation failed:', gasError);
+
+      // Parse gas estimation errors (these happen before sending the tx)
+      if (gasError.message?.includes('CannotSelfDelegate') || gasError.data?.includes('CannotSelfDelegate')) {
+        throw new Error('Cannot delegate to yourself');
+      } else if (gasError.message?.includes('TopicNotActive') || gasError.data?.includes('TopicNotActive')) {
+        throw new Error('Topic is not active');
+      } else if (gasError.message?.includes('DelegateIsDeadEnd') || gasError.data?.includes('DelegateIsDeadEnd')) {
+        throw new Error('Delegate has declared themselves as a dead-end');
+      } else if (gasError.message?.includes('CreatesCycle') || gasError.data?.includes('CreatesCycle')) {
+        throw new Error('This delegation would create a cycle');
+      } else if (gasError.message?.includes('ExceedsMaxDepth') || gasError.data?.includes('ExceedsMaxDepth')) {
+        throw new Error('This delegation would exceed maximum depth (7 levels)');
+      }
+
+      // If gas estimation fails for unknown reason, still throw the error
+      throw new Error(`Transaction would fail: ${gasError.reason || gasError.message || 'Unknown error'}`);
     }
 
-    throw new Error(error.message || 'Failed to delegate vote');
+    // Send transaction with estimated gas
+    const tx = await contract.delegate(topicId, delegateAddress, { gasLimit });
+    console.log('[DelegationManager] Transaction sent:', tx.hash);
+
+    const receipt = await tx.wait();
+    console.log('[DelegationManager] Transaction confirmed:', receipt.hash);
+
+    return receipt.hash;
+  } catch (error: any) {
+    console.error('[DelegationManager] Error delegating vote:', error);
+
+    // Handle user rejection
+    if (error.code === 'ACTION_REJECTED' || error.code === 4001) {
+      throw new Error('Transaction rejected by user');
+    }
+
+    // Handle account mismatch
+    if (error.message?.includes('wrong address') || error.message?.includes('account mismatch')) {
+      throw new Error('Account mismatch detected. Please refresh the page and try again.');
+    }
+
+    // Handle RPC errors
+    if (error.code === 'UNKNOWN_ERROR' || error.code === -32603) {
+      // Log full error details for debugging
+      console.error('[DelegationManager] RPC Error Details:', {
+        code: error.code,
+        message: error.message,
+        data: error.data,
+        error: error.error
+      });
+      throw new Error('Transaction failed on the blockchain. Please check your account balance and try again.');
+    }
+
+    // If error was already formatted, throw it as-is
+    if (error.message && !error.message.includes('could not coalesce')) {
+      throw error;
+    }
+
+    // Default error
+    throw new Error('Failed to delegate vote. Please try again.');
   }
 }
 
@@ -86,12 +143,56 @@ export async function revoke(
   const contract = getDelegationManagerContract(signer, chainId);
 
   try {
-    const tx = await contract.revoke(topicId);
+    const signerAddress = await signer.getAddress();
+    console.log('[DelegationManager] Revoking delegation:', {
+      topicId,
+      signerAddress
+    });
+
+    // Estimate gas before sending transaction
+    let gasLimit;
+    try {
+      const estimatedGas = await contract.revoke.estimateGas(topicId);
+      // Add 20% buffer to estimated gas
+      gasLimit = (estimatedGas * 120n) / 100n;
+      console.log('[DelegationManager] Gas estimate:', {
+        estimated: estimatedGas.toString(),
+        withBuffer: gasLimit.toString()
+      });
+    } catch (gasError: any) {
+      console.error('[DelegationManager] Gas estimation failed:', gasError);
+      throw new Error(`Transaction would fail: ${gasError.reason || gasError.message || 'Unknown error'}`);
+    }
+
+    const tx = await contract.revoke(topicId, { gasLimit });
+    console.log('[DelegationManager] Transaction sent:', tx.hash);
+
     const receipt = await tx.wait();
+    console.log('[DelegationManager] Transaction confirmed:', receipt.hash);
+
     return receipt.hash;
   } catch (error: any) {
-    console.error('Error revoking delegation:', error);
-    throw new Error(error.message || 'Failed to revoke delegation');
+    console.error('[DelegationManager] Error revoking delegation:', error);
+
+    if (error.code === 'ACTION_REJECTED' || error.code === 4001) {
+      throw new Error('Transaction rejected by user');
+    } else if (error.message?.includes('wrong address') || error.message?.includes('account mismatch')) {
+      throw new Error('Account mismatch detected. Please refresh the page and try again.');
+    } else if (error.code === 'UNKNOWN_ERROR' || error.code === -32603) {
+      console.error('[DelegationManager] RPC Error Details:', {
+        code: error.code,
+        message: error.message,
+        data: error.data,
+        error: error.error
+      });
+      throw new Error('Transaction failed on the blockchain. Please check your account balance and try again.');
+    }
+
+    if (error.message && !error.message.includes('could not coalesce')) {
+      throw error;
+    }
+
+    throw new Error('Failed to revoke delegation. Please try again.');
   }
 }
 

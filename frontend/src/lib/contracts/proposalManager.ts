@@ -77,6 +77,7 @@ export async function createProposal(
   const contract = getProposalManagerContract(signer, chainId);
 
   try {
+    const signerAddress = await signer.getAddress();
     const params = {
       topicId,
       title,
@@ -84,8 +85,39 @@ export async function createProposal(
       votingPeriod
     };
 
-    const tx = await contract.createProposal(params);
+    console.log('[ProposalManager] Creating proposal:', {
+      ...params,
+      signerAddress
+    });
+
+    // Estimate gas before sending transaction
+    let gasLimit;
+    try {
+      const estimatedGas = await contract.createProposal.estimateGas(params);
+      gasLimit = (estimatedGas * 120n) / 100n;
+      console.log('[ProposalManager] Gas estimate:', {
+        estimated: estimatedGas.toString(),
+        withBuffer: gasLimit.toString()
+      });
+    } catch (gasError: any) {
+      console.error('[ProposalManager] Gas estimation failed:', gasError);
+
+      if (gasError.message?.includes('InvalidTopic') || gasError.data?.includes('InvalidTopic')) {
+        throw new Error('Topic is not active');
+      } else if (gasError.message?.includes('InsufficientVotingPower') || gasError.data?.includes('InsufficientVotingPower')) {
+        throw new Error('You need voting power to create proposals');
+      } else if (gasError.message?.includes('InvalidVotingPeriod') || gasError.data?.includes('InvalidVotingPeriod')) {
+        throw new Error('Voting period must be between 100 and 100800 blocks');
+      }
+
+      throw new Error(`Transaction would fail: ${gasError.reason || gasError.message || 'Unknown error'}`);
+    }
+
+    const tx = await contract.createProposal(params, { gasLimit });
+    console.log('[ProposalManager] Transaction sent:', tx.hash);
+
     const receipt = await tx.wait();
+    console.log('[ProposalManager] Transaction confirmed:', receipt.hash);
 
     // Parse ProposalCreated event to get ID
     const event = receipt.logs
@@ -105,17 +137,25 @@ export async function createProposal(
       txHash: receipt.hash
     };
   } catch (error: any) {
-    console.error('Error creating proposal:', error);
+    console.error('[ProposalManager] Error creating proposal:', error);
 
-    if (error.message.includes('InvalidTopic')) {
-      throw new Error('Topic is not active');
-    } else if (error.message.includes('InsufficientVotingPower')) {
-      throw new Error('You need voting power to create proposals');
-    } else if (error.message.includes('InvalidVotingPeriod')) {
-      throw new Error('Voting period must be between 100 and 100800 blocks');
+    if (error.code === 'ACTION_REJECTED' || error.code === 4001) {
+      throw new Error('Transaction rejected by user');
+    } else if (error.code === 'UNKNOWN_ERROR' || error.code === -32603) {
+      console.error('[ProposalManager] RPC Error Details:', {
+        code: error.code,
+        message: error.message,
+        data: error.data,
+        error: error.error
+      });
+      throw new Error('Transaction failed on the blockchain. Please check your account balance and try again.');
     }
 
-    throw new Error(error.message || 'Failed to create proposal');
+    if (error.message && !error.message.includes('could not coalesce')) {
+      throw error;
+    }
+
+    throw new Error('Failed to create proposal. Please try again.');
   }
 }
 
@@ -131,21 +171,63 @@ export async function castVote(
   const contract = getProposalManagerContract(signer, chainId);
 
   try {
-    const tx = await contract.castVote(proposalId, choice);
-    const receipt = await tx.wait();
-    return receipt.hash;
-  } catch (error: any) {
-    console.error('Error casting vote:', error);
+    const signerAddress = await signer.getAddress();
+    console.log('[ProposalManager] Casting vote:', {
+      proposalId,
+      choice,
+      signerAddress
+    });
 
-    if (error.message.includes('ProposalNotActive')) {
-      throw new Error('Proposal is not active or voting has ended');
-    } else if (error.message.includes('AlreadyVoted')) {
-      throw new Error('You have already voted on this proposal');
-    } else if (error.message.includes('InsufficientVotingPower')) {
-      throw new Error('You cannot vote because you delegated your vote');
+    // Estimate gas before sending transaction
+    let gasLimit;
+    try {
+      const estimatedGas = await contract.castVote.estimateGas(proposalId, choice);
+      gasLimit = (estimatedGas * 120n) / 100n;
+      console.log('[ProposalManager] Gas estimate:', {
+        estimated: estimatedGas.toString(),
+        withBuffer: gasLimit.toString()
+      });
+    } catch (gasError: any) {
+      console.error('[ProposalManager] Gas estimation failed:', gasError);
+
+      if (gasError.message?.includes('ProposalNotActive') || gasError.data?.includes('ProposalNotActive')) {
+        throw new Error('Proposal is not active or voting has ended');
+      } else if (gasError.message?.includes('AlreadyVoted') || gasError.data?.includes('AlreadyVoted')) {
+        throw new Error('You have already voted on this proposal');
+      } else if (gasError.message?.includes('InsufficientVotingPower') || gasError.data?.includes('InsufficientVotingPower')) {
+        throw new Error('You cannot vote because you delegated your vote');
+      }
+
+      throw new Error(`Transaction would fail: ${gasError.reason || gasError.message || 'Unknown error'}`);
     }
 
-    throw new Error(error.message || 'Failed to cast vote');
+    const tx = await contract.castVote(proposalId, choice, { gasLimit });
+    console.log('[ProposalManager] Transaction sent:', tx.hash);
+
+    const receipt = await tx.wait();
+    console.log('[ProposalManager] Transaction confirmed:', receipt.hash);
+
+    return receipt.hash;
+  } catch (error: any) {
+    console.error('[ProposalManager] Error casting vote:', error);
+
+    if (error.code === 'ACTION_REJECTED' || error.code === 4001) {
+      throw new Error('Transaction rejected by user');
+    } else if (error.code === 'UNKNOWN_ERROR' || error.code === -32603) {
+      console.error('[ProposalManager] RPC Error Details:', {
+        code: error.code,
+        message: error.message,
+        data: error.data,
+        error: error.error
+      });
+      throw new Error('Transaction failed on the blockchain. Please check your account balance and try again.');
+    }
+
+    if (error.message && !error.message.includes('could not coalesce')) {
+      throw error;
+    }
+
+    throw new Error('Failed to cast vote. Please try again.');
   }
 }
 

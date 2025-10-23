@@ -110,7 +110,7 @@ async function updateWalletState(force: boolean = false): Promise<void> {
       throw new Error('MetaMask is not installed');
     }
 
-    // Get current accounts
+    // Get current accounts directly from MetaMask
     const accounts = await window.ethereum.request({ method: 'eth_accounts' });
 
     if (accounts.length === 0) {
@@ -119,10 +119,45 @@ async function updateWalletState(force: boolean = false): Promise<void> {
       return;
     }
 
-    // Create fresh provider and signer
+    // Create fresh provider
     const provider = new ethers.BrowserProvider(window.ethereum as Eip1193Provider);
+
+    // IMPORTANT: Always get a fresh signer to ensure it's tied to the current account
     const signer = await provider.getSigner();
     const address = await signer.getAddress();
+
+    // Verify the signer address matches the MetaMask account
+    const currentAccount = accounts[0].toLowerCase();
+    if (address.toLowerCase() !== currentAccount) {
+      console.warn('[WalletConnect] Address mismatch detected, retrying...', {
+        signerAddress: address,
+        metamaskAccount: currentAccount
+      });
+      // Retry once with a fresh provider
+      const freshProvider = new ethers.BrowserProvider(window.ethereum as Eip1193Provider);
+      const freshSigner = await freshProvider.getSigner();
+      const freshAddress = await freshSigner.getAddress();
+
+      if (freshAddress.toLowerCase() !== currentAccount) {
+        throw new Error('Account mismatch: wallet state is inconsistent with MetaMask');
+      }
+
+      // Use fresh instances
+      const network = await freshProvider.getNetwork();
+      const chainId = Number(network.chainId);
+
+      walletStore.set({
+        connected: true,
+        address: freshAddress,
+        chainId,
+        provider: freshProvider,
+        signer: freshSigner,
+      });
+
+      console.log('[WalletConnect] State updated (retry):', { address: freshAddress, chainId });
+      return;
+    }
+
     const network = await provider.getNetwork();
     const chainId = Number(network.chainId);
 
@@ -409,6 +444,47 @@ export async function checkConnection(): Promise<void> {
     }
   } catch (error) {
     console.error('[WalletConnect] Failed to check connection:', error);
+  }
+}
+
+/**
+ * Get a fresh signer for the current account
+ * This should be called before any transaction to ensure the signer is up-to-date
+ * and matches the current MetaMask account
+ */
+export async function getFreshSigner(): Promise<ethers.Signer> {
+  if (typeof window.ethereum === 'undefined') {
+    throw new Error('MetaMask is not installed');
+  }
+
+  try {
+    // Get current account from MetaMask
+    const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+
+    if (accounts.length === 0) {
+      throw new Error('No accounts connected. Please connect your wallet.');
+    }
+
+    // Create a fresh provider and signer
+    const provider = new ethers.BrowserProvider(window.ethereum as Eip1193Provider);
+    const signer = await provider.getSigner();
+    const address = await signer.getAddress();
+
+    // Verify it matches the current MetaMask account
+    const currentAccount = accounts[0].toLowerCase();
+    if (address.toLowerCase() !== currentAccount) {
+      console.error('[WalletConnect] Signer/account mismatch:', {
+        signerAddress: address,
+        metamaskAccount: currentAccount
+      });
+      throw new Error('Wallet state is inconsistent. Please try disconnecting and reconnecting your wallet.');
+    }
+
+    console.log('[WalletConnect] Fresh signer created for:', address);
+    return signer;
+  } catch (error: any) {
+    console.error('[WalletConnect] Failed to get fresh signer:', error);
+    throw error;
   }
 }
 
