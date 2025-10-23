@@ -7,6 +7,7 @@
   import NotificationToast from '$lib/components/NotificationToast.svelte';
   import DashboardPage from './routes/dashboard/+page.svelte';
   import GlobalGraphPage from './routes/global-graph/+page.svelte';
+  import RewardsPage from './routes/rewards/+page.svelte';
 
   let addressesValid = false;
   let currentRoute = 'home';
@@ -77,6 +78,13 @@
             on:click={() => navigate('global-graph')}
           >
             Global Graph
+          </button>
+          <button
+            class="nav-link"
+            class:active={currentRoute === 'rewards'}
+            on:click={() => navigate('rewards')}
+          >
+            💎 Rewards
           </button>
         </nav>
 
@@ -208,6 +216,8 @@
           <DashboardPage />
         {:else if currentRoute === 'global-graph'}
           <GlobalGraphPage />
+        {:else if currentRoute === 'rewards'}
+          <RewardsPage />
         {/if}
       {/if}
     </div>

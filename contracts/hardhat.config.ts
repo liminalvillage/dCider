@@ -5,6 +5,7 @@ import "@typechain/hardhat";
 import "hardhat-deploy";
 import * as dotenv from "dotenv";
 
+// Load .env from contracts directory
 dotenv.config();
 
 const config: HardhatUserConfig = {
@@ -63,9 +64,33 @@ const config: HardhatUserConfig = {
     cache: "./cache",
     artifacts: "./artifacts",
   },
+  // Exclude test files from compilation
+  solidity: {
+    version: "0.8.20",
+    settings: {
+      optimizer: {
+        enabled: true,
+        runs: 200,
+      },
+      viaIR: true,
+    },
+  },
+  // Ignore test files during deployment
+  external: {
+    contracts: [
+      {
+        artifacts: "src",
+      },
+    ],
+  },
   typechain: {
     outDir: "typechain-types",
     target: "ethers-v6",
+  },
+  namedAccounts: {
+    deployer: {
+      default: 0, // Use first account from accounts array
+    },
   },
 };
 

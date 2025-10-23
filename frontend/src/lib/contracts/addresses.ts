@@ -17,11 +17,13 @@ export interface ContractAddresses {
 // Deployed on 2025-10-18
 // Updated with getTopicDelegators function: 2025-10-18
 // Redeployed: 2025-10-19 (dynamic vote tallying - delegation revocation updates vote counts)
+// RewardDistributor deployed: 2025-10-23
+// VotePowerVerifier redeployed: 2025-10-23 (added reward distribution support)
 export const CHIADO_ADDRESSES: ContractAddresses = {
   delegationManager: '0x4c8875ac664bb0a94f5eE71b232A786772Fdd704',
   topicRegistry: '0x9d9063f220aA191aAC406De2A5432A577b253827',
-  votePowerVerifier: '0x9aef5a8B434BF396049E06050e59D1036Eed7e84',
-  rewardDistributor: '0x0000000000000000000000000000000000000000',
+  votePowerVerifier: '0x156ee62c9bf96F28b5aacf37C5B73935CA1d71C3',
+  rewardDistributor: '0x8a4f7A29989565F36216Eb82ca030bEb129E039A',
   proposalManager: '0xBF57d60545a4A47e6c01197D2Dd91F5E06780Fa5',
 };
 

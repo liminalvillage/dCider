@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {IVotePowerVerifier} from "../interfaces/IVotePowerVerifier.sol";
+import {IRewardDistributor} from "../interfaces/IRewardDistributor.sol";
 import {AttestationLib} from "../libraries/AttestationLib.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -37,6 +38,13 @@ contract VotePowerVerifier is IVotePowerVerifier, AccessControl, ReentrancyGuard
 
     /// @notice Last attestation hash per topic
     mapping(uint256 => bytes32) private _lastAttestationHash;
+
+    /// @notice Reward distributor contract (optional)
+    IRewardDistributor public rewardDistributor;
+
+    // ============ Events ============
+
+    event RewardDistributorUpdated(address indexed oldDistributor, address indexed newDistributor);
 
     // ============ Constructor ============
 
@@ -131,6 +139,11 @@ contract VotePowerVerifier is IVotePowerVerifier, AccessControl, ReentrancyGuard
 
         emit AttestationAccepted(attestation.resultHash, block.timestamp);
         emit VotingPowerUpdated(attestation.topicId, attestation.resultHash, block.timestamp);
+
+        // Trigger reward distribution update if distributor is set
+        if (address(rewardDistributor) != address(0)) {
+            _triggerRewardUpdate(attestation.topicId, addresses, powers);
+        }
     }
 
     /**
@@ -272,6 +285,19 @@ contract VotePowerVerifier is IVotePowerVerifier, AccessControl, ReentrancyGuard
         emit OperatorRemoved(operatorAddress);
     }
 
+    /**
+     * @notice Set reward distributor contract
+     * @param _rewardDistributor Address of reward distributor contract
+     */
+    function setRewardDistributor(address _rewardDistributor)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        address oldDistributor = address(rewardDistributor);
+        rewardDistributor = IRewardDistributor(_rewardDistributor);
+        emit RewardDistributorUpdated(oldDistributor, _rewardDistributor);
+    }
+
     // ============ Internal Functions ============
 
     /**
@@ -298,5 +324,42 @@ contract VotePowerVerifier is IVotePowerVerifier, AccessControl, ReentrancyGuard
         }
 
         _lastAttestationHash[topicId] = attestationHash;
+    }
+
+    /**
+     * @notice Trigger reward distributor update with new voting power
+     * @param topicId Topic ID
+     * @param addresses Array of addresses with voting power
+     * @param powers Array of voting power values
+     */
+    function _triggerRewardUpdate(
+        uint256 topicId,
+        address[] calldata addresses,
+        uint256[] calldata powers
+    ) internal {
+        // Calculate total voting power
+        uint256 totalVotingPower = 0;
+        for (uint256 i = 0; i < powers.length; i++) {
+            totalVotingPower += powers[i];
+        }
+
+        // Build voting power update array
+        IRewardDistributor.VotingPowerUpdate[] memory updates =
+            new IRewardDistributor.VotingPowerUpdate[](addresses.length);
+
+        for (uint256 i = 0; i < addresses.length; i++) {
+            updates[i] = IRewardDistributor.VotingPowerUpdate({
+                delegate: addresses[i],
+                power: powers[i]
+            });
+        }
+
+        // Call reward distributor
+        try rewardDistributor.updateFlows(topicId, updates, totalVotingPower) {
+            // Success
+        } catch {
+            // Don't revert entire attestation if reward update fails
+            // Log could be added here if needed
+        }
     }
 }
