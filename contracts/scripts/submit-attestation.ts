@@ -21,9 +21,9 @@ async function main() {
   console.log("Operator account:", deployer.address);
   console.log("Balance:", ethers.formatEther(await ethers.provider.getBalance(deployer.address)), "xDAI\n");
 
-  // Contract addresses (hardcoded for Chiado)
-  const delegationManagerAddress = "0x642421767A8bBB0ca27800a02Ec87b58a4dAE35A";
-  const votePowerVerifierAddress = "0x2844871F06BED295aeF95f7e1e0a16360A942DBF";
+  // Contract addresses (updated for Chiado - 2025-10-23)
+  const delegationManagerAddress = "0x4c8875ac664bb0a94f5eE71b232A786772Fdd704";
+  const votePowerVerifierAddress = "0x156ee62c9bf96F28b5aacf37C5B73935CA1d71C3";
 
   const topicId = 1; // Climate Policy
 
